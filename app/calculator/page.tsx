@@ -172,7 +172,7 @@ export default function CalculatorPage() {
         backdropFilter: 'blur(20px)',
         display: 'flex', alignItems: 'center', gap: '1rem',
       }}>
-        <Link href={`${basePath}/`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+        <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
           ← Back
         </Link>
         <span style={{ color: 'var(--border)', userSelect: 'none' }}>|</span>
