@@ -1,8 +1,7 @@
 <div align="center">
-  <img src="public/images/hero.png" width="100%" alt="FinOps Estimator Hero Banner" />
+  <img src="public/images/hero.png" width="100%" alt="FinOps Estimator - The AI Architectural Compass" />
   
-  # ⚖️ FinOps Estimator
-  ### *The Solutions Architect's AI Blueprinting Compass*
+  <br/>
   
   [![Live Demo](https://img.shields.io/badge/Live-Demo-2a9fff?style=for-the-badge&logo=github-pages&logoColor=white)](https://joessattes.github.io/FinOps-Estimator)
   [![Build Status](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
