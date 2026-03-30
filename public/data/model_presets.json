@@ -1,0 +1,125 @@
+{
+  "llm": [
+    {
+      "id": "llama3_8b",
+      "name": "Llama 3 8B",
+      "params_b": 8,
+      "layers": 32,
+      "num_heads": 32,
+      "num_kv_heads": 8,
+      "hidden_dim": 4096,
+      "max_context_tokens": 128000,
+      "attention_type": "GQA",
+      "is_moe": false
+    },
+    {
+      "id": "llama3_70b",
+      "name": "Llama 3 70B",
+      "params_b": 70,
+      "layers": 80,
+      "num_heads": 64,
+      "num_kv_heads": 8,
+      "hidden_dim": 8192,
+      "max_context_tokens": 128000,
+      "attention_type": "GQA",
+      "is_moe": false
+    },
+    {
+      "id": "gemma2_9b",
+      "name": "Gemma 2 9B",
+      "params_b": 9.2,
+      "layers": 42,
+      "num_heads": 16,
+      "num_kv_heads": 8,
+      "hidden_dim": 3584,
+      "max_context_tokens": 8192,
+      "attention_type": "GQA",
+      "is_moe": false
+    },
+    {
+      "id": "gemma2_27b",
+      "name": "Gemma 2 27B",
+      "params_b": 27.2,
+      "layers": 46,
+      "num_heads": 32,
+      "num_kv_heads": 16,
+      "hidden_dim": 4608,
+      "max_context_tokens": 8192,
+      "attention_type": "GQA",
+      "is_moe": false
+    },
+    {
+      "id": "mixtral_8x7b",
+      "name": "Mixtral 8x7B",
+      "params_b": 46.7,
+      "active_params_b": 12.9,
+      "layers": 32,
+      "num_heads": 32,
+      "num_kv_heads": 8,
+      "hidden_dim": 4096,
+      "max_context_tokens": 32768,
+      "attention_type": "GQA",
+      "is_moe": true,
+      "num_experts": 8,
+      "active_experts": 2
+    },
+    {
+      "id": "qwen25_7b",
+      "name": "Qwen 2.5 7B",
+      "params_b": 7.6,
+      "layers": 28,
+      "num_heads": 28,
+      "num_kv_heads": 4,
+      "hidden_dim": 3584,
+      "max_context_tokens": 131072,
+      "attention_type": "GQA",
+      "is_moe": false
+    }
+  ],
+  "stt": [
+    {
+      "id": "whisper_turbo",
+      "name": "Whisper Turbo (v3)",
+      "params_m": 809,
+      "vram_gb_fp16": 1.6,
+      "rtf_l4": 0.05,
+      "rtf_t4": 0.12
+    },
+    {
+      "id": "whisper_large_v3",
+      "name": "Whisper Large v3",
+      "params_m": 1550,
+      "vram_gb_fp16": 3.1,
+      "rtf_l4": 0.08,
+      "rtf_t4": 0.18
+    }
+  ],
+  "tts": [
+    {
+      "id": "fish_speech",
+      "name": "Fish Speech (v1.4)",
+      "vram_gb_fp16": 2.5,
+      "rtf_l4": 0.08
+    },
+    {
+      "id": "gtts_edge",
+      "name": "Edge TTS (Cloud API)",
+      "vram_gb_fp16": 0,
+      "rtf_l4": 0.02
+    }
+  ],
+  "speech_processing": [
+    {
+      "id": "pyannote_31",
+      "name": "Pyannote 3.1 (Diarization)",
+      "vram_gb_fp16": 1.8,
+      "latency_ms_avg": 250
+    },
+    {
+      "id": "silero_vad",
+      "name": "Silero VAD",
+      "vram_gb_fp16": 0.2,
+      "latency_ms_avg": 50
+    }
+  ]
+}
