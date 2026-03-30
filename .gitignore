@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/
 lib64/
 parts/
 sdist/
@@ -208,4 +208,4 @@ __marimo__/
 node_modules
 .next
 out
-docs
+docs/knowledges
