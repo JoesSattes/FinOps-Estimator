@@ -72,7 +72,7 @@ export default function Home() {
             style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', transition: 'color 0.2s' }}>
             GitHub ↗
           </a>
-          <Link href={`${basePath}/calculator`}
+          <Link href="/calculator"
             style={{
               padding: '0.5rem 1.25rem',
               background: 'linear-gradient(135deg, #2a9fff, #1481f5)',
@@ -112,7 +112,7 @@ export default function Home() {
         </p>
 
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link href={`${basePath}/calculator`}
+          <Link href="/calculator"
             style={{
               padding: '0.875rem 2rem',
               background: 'linear-gradient(135deg, #2a9fff, #1481f5)',
@@ -209,7 +209,7 @@ export default function Home() {
             Enter your model, target CCU, and latency constraints.
             Get GPU recommendations with monthly cost estimates in seconds.
           </p>
-          <Link href={`${basePath}/calculator`}
+          <Link href="/calculator"
             style={{
               padding: '0.875rem 2.5rem',
               background: 'linear-gradient(135deg, #2a9fff, #1481f5)',
