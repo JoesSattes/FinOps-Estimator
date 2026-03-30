@@ -94,6 +94,9 @@ export default function CalculatorPage() {
   const [gpuSpecs, setGpuSpecs] = useState<GpuSpec[]>([])
   const [activeTab, setActiveTab] = useState('config')
   const [selectedModelId, setSelectedModelId] = useState('llama3_8b')
+  const [showTerraform, setShowTerraform] = useState(false)
+  const [tfTab, setTfTab] = useState<'main' | 'vars'>('main')
+  const [copied, setCopied] = useState(false)
   const [inputs, setInputs] = useState(DEFAULT_INPUTS)
   const [results, setResults] = useState<ReturnType<typeof runFullCalculation> | null>(null)
 
@@ -694,9 +697,17 @@ export default function CalculatorPage() {
                       <div>
                          <div style={{ fontSize: '0.7rem', color: '#2a9fff', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Solution Architect Verdict</div>
                          <h3 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'white', marginBottom: '0.5rem' }}>{results.finops.verdict.category}</h3>
-                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#2a9fff22', padding: '0.4rem 0.75rem', borderRadius: 6, border: '1px solid #2a9fff44' }}>
-                           <span style={{ fontSize: '1rem' }}>☁️</span>
-                           <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#2a9fff' }}>{results.finops.verdict.recommended_platform}</span>
+                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#2a9fff22', padding: '0.4rem 0.75rem', borderRadius: 6, border: '1px solid #2a9fff44' }}>
+                              <span style={{ fontSize: '1rem' }}>☁️</span>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#2a9fff' }}>{results.finops.verdict.recommended_platform}</span>
+                            </div>
+                            <button 
+                              onClick={() => setShowTerraform(!showTerraform)}
+                              className="tab-button" 
+                              style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', background: showTerraform ? '#2a9fff' : 'rgba(255,255,255,0.05)', color: showTerraform ? 'black' : 'white', fontWeight: 700 }}>
+                              {showTerraform ? '✕ Close Config' : '📄 Export Terraform'}
+                            </button>
                          </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -704,9 +715,50 @@ export default function CalculatorPage() {
                         <div style={{ fontSize: '2rem', fontWeight: 900, color: '#00e676' }}>{formatUsd(results.finops.verdict.total_monthly_with_infra)}<span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/mo</span></div>
                       </div>
                    </div>
-                   <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: '80%' }}>
+                   <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: '80%', marginBottom: showTerraform ? '1.5rem' : 0 }}>
                       {results.finops.verdict.advice}
                    </p>
+
+                   {showTerraform && (
+                     <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                        <div style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                           <div style={{ display: 'flex', gap: '1rem' }}>
+                              <button 
+                                onClick={() => setTfTab('main')}
+                                style={{ background: 'transparent', border: 'none', color: tfTab === 'main' ? '#2a9fff' : 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', borderBottom: tfTab === 'main' ? '2px solid #2a9fff' : 'none', paddingBottom: 2 }}>
+                                main.tf
+                              </button>
+                              <button 
+                                onClick={() => setTfTab('vars')}
+                                style={{ background: 'transparent', border: 'none', color: tfTab === 'vars' ? '#2a9fff' : 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', borderBottom: tfTab === 'vars' ? '2px solid #2a9fff' : 'none', paddingBottom: 2 }}>
+                                terraform.tfvars
+                              </button>
+                           </div>
+                           <button 
+                             onClick={() => {
+                               const code = tfTab === 'main' ? results.finops.verdict!.terraform_draft : results.finops.verdict!.terraform_vars;
+                               navigator.clipboard.writeText(code);
+                               setCopied(true);
+                               setTimeout(() => setCopied(false), 2000);
+                             }}
+                             style={{ background: 'transparent', border: 'none', color: '#2a9fff', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>
+                             {copied ? '✓ Copied' : '📋 Copy Code'}
+                           </button>
+                        </div>
+                        <pre style={{ 
+                          padding: '1rem', 
+                          margin: 0, 
+                          fontSize: '0.75rem', 
+                          color: '#00e676', 
+                          fontFamily: 'JetBrains Mono, monospace', 
+                          lineHeight: 1.5,
+                          overflowX: 'auto',
+                          whiteSpace: 'pre'
+                        }}>
+                           {tfTab === 'main' ? results.finops.verdict.terraform_draft : results.finops.verdict.terraform_vars}
+                        </pre>
+                     </div>
+                   )}
                  </div>
                )}
 

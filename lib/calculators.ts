@@ -159,6 +159,8 @@ export interface SolutionVerdict {
   advice: string;
   fixed_infra_monthly: number;
   total_monthly_with_infra: number;
+  terraform_draft: string;
+  terraform_vars: string;
 }
 
 export interface FinOpsResult {
@@ -455,8 +457,92 @@ function generateVerdict(inputs: CalculatorInputs, resources: ResourceResult, ma
     recommended_platform: platform,
     advice,
     fixed_infra_monthly: fixed_infra,
-    total_monthly_with_infra: match.spot_monthly_total + fixed_infra
+    total_monthly_with_infra: match.spot_monthly_total + fixed_infra,
+    terraform_draft: generateTerraformDraft(inputs, match),
+    terraform_vars: generateTerraformVars(inputs, match)
   };
+}
+
+function generateTerraformVars(inputs: CalculatorInputs, match: GpuMatch): string {
+  const instances = match.instances_needed;
+  let machine = "";
+  
+  if (inputs.cloud_provider === 'gcp') machine = match.gpu.name.includes("L4") ? "g2-standard-4" : "a2-highgpu-1g";
+  else if (inputs.cloud_provider === 'aws') machine = match.gpu.name.includes("A10G") ? "g5.xlarge" : "p4d.24xlarge";
+  else if (inputs.cloud_provider === 'azure') machine = match.gpu.name.includes("A100") ? "Standard_NC4as_T4_v3" : "Standard_NC24ads_A100_v4";
+
+  return `node_count   = ${instances}
+machine_type = "${machine}"
+environment  = "production"`;
+}
+
+function generateTerraformDraft(inputs: CalculatorInputs, match: GpuMatch): string {
+  if (inputs.cloud_provider === 'gcp') {
+    const gpu_type = match.gpu.name.includes("L4") ? "nvidia-l4" : "nvidia-tesla-a100";
+    
+    return `# Main Config (main.tf)
+variable "node_count" { default = 1 }
+variable "machine_type" { default = "g2-standard-4" }
+
+resource "google_container_node_pool" "ai_nodes" {
+  name       = "ai-inference-pool"
+  cluster    = google_container_cluster.primary.id
+  node_count = var.node_count
+
+  node_config {
+    machine_type = var.machine_type
+    
+    guest_accelerator {
+      type  = "${gpu_type}"
+      count = 1
+    }
+
+    spot = true
+    oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
+}`;
+  }
+
+  if (inputs.cloud_provider === 'aws') {
+    return `# Main Config (main.tf)
+variable "node_count" { default = 1 }
+variable "machine_type" { default = "g5.xlarge" }
+
+resource "aws_eks_node_group" "ai_nodes" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "ai-inference-nodes"
+  node_role_arn   = aws_iam_role.nodes.arn
+  subnet_ids      = aws_subnet.private[*].id
+
+  scaling_config {
+    desired_size = var.node_count
+    max_size     = var.node_count + 2
+    min_size     = 1
+  }
+
+  instance_types = [var.machine_type]
+  capacity_type  = "SPOT"
+}`;
+  }
+
+  if (inputs.cloud_provider === 'azure') {
+    return `# Main Config (main.tf)
+variable "node_count" { default = 1 }
+variable "vm_size" { default = "Standard_NC4as_T4_v3" }
+
+resource "azurerm_kubernetes_cluster_node_pool" "ai_nodes" {
+  name                  = "ainodes"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.main.id
+  vm_size               = var.vm_size
+  node_count            = var.node_count
+
+  priority        = "Spot"
+  eviction_policy = "Delete"
+  spot_max_price  = -1 
+}`;
+  }
+
+  return "# On-Premises: Refer to Solution_Architecture_Patterns.md";
 }
 
 function generateHpaConfig(inputs: CalculatorInputs, match: GpuMatch | null): string {
