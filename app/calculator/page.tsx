@@ -47,7 +47,9 @@ const DEFAULT_INPUTS: Omit<CalculatorInputs, 'model'> = {
   use_gqa: true,
   overhead_multiplier: 1.15,
   custom_params: {
-    use_custom: false,
+    use_custom_llm: false,
+    use_custom_stt: false,
+    use_custom_tts: false,
     llm_params_b: 7,
     stt_params_b: 1.5,
     tts_params_b: 1.0,
@@ -92,6 +94,9 @@ export default function CalculatorPage() {
   const [gpuSpecs, setGpuSpecs] = useState<GpuSpec[]>([])
   const [activeTab, setActiveTab] = useState('config')
   const [selectedModelId, setSelectedModelId] = useState('llama3_8b')
+  const [showTerraform, setShowTerraform] = useState(false)
+  const [tfTab, setTfTab] = useState<'main' | 'vars'>('main')
+  const [copied, setCopied] = useState(false)
   const [inputs, setInputs] = useState(DEFAULT_INPUTS)
   const [results, setResults] = useState<ReturnType<typeof runFullCalculation> | null>(null)
 
@@ -143,9 +148,28 @@ export default function CalculatorPage() {
           {format(inputs[field] as number)}
         </span>
       </div>
-      <input type="range" className="slider" min={min} max={max} step={step}
-        value={inputs[field] as number}
-        onChange={e => setInput(field, parseFloat(e.target.value))} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <input type="range" className="slider" min={min} max={max} step={step}
+          value={inputs[field] as number}
+          onChange={e => setInput(field, parseFloat(e.target.value))}
+          style={{ flex: 1 }} />
+        <input type="number" min={min} max={max} step={step}
+          value={inputs[field] as number}
+          onChange={e => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val)) setInput(field, Math.min(max, Math.max(min, val)));
+          }}
+          style={{ 
+            width: '60px', 
+            background: 'rgba(255,255,255,0.05)', 
+            border: '1px solid var(--border)', 
+            borderRadius: '4px', 
+            color: 'white', 
+            fontSize: '0.75rem', 
+            padding: '0.25rem',
+            textAlign: 'center'
+          }} />
+      </div>
       {helpText && <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{helpText}</p>}
     </div>
   )
@@ -220,80 +244,141 @@ export default function CalculatorPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               {/* Left Column */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div className="glass-card" style={{ padding: '1.5rem' }}>
-                  <h2 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem', color: 'white' }}>🤖 LLM Selection</h2>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>Target Model</label>
-                    <select className="styled-select" value={selectedModelId} onChange={e => setSelectedModelId(e.target.value)}>
-                      {models.map(m => (
-                        <option key={m.id} value={m.id}>{m.name} — {m.params_b}B{m.is_moe ? ` (${m.active_params_b}B active)` : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {model && !inputs.custom_params.use_custom && (
-                    <div style={{ background: 'rgba(42,159,255,0.05)', border: '1px solid rgba(42,159,255,0.15)', borderRadius: 8, padding: '0.875rem', fontSize: '0.75rem' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-                        {[
-                          ['Params', `${model.params_b}B`],
-                          ['Layers', model.layers],
-                          ['Attention', model.attention_type],
-                          ['KV Heads', model.num_kv_heads],
-                          ['Context Limit', `${(model.max_context_tokens / 1000).toFixed(0)}K tokens`],
-                          ['Type', model.is_moe ? `MoE` : 'Dense'],
-                        ].map(([k, v]) => (
-                          <div key={String(k)} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>{k}</span>
-                            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{v}</span>
-                          </div>
+               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* LLM Configuration */}
+                {inputs.enabled_components.llm && (
+                  <div className="glass-card" style={{ padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>🤖 LLM Config</h2>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.7rem' }}>
+                        <input type="checkbox" checked={inputs.custom_params.use_custom_llm}
+                          onChange={(e) => setInput('custom_params', { ...inputs.custom_params, use_custom_llm: e.target.checked })}
+                          style={{ accentColor: '#ffca28' }} />
+                        <span style={{ color: inputs.custom_params.use_custom_llm ? '#ffca28' : 'var(--text-muted)' }}>Custom</span>
+                      </label>
+                    </div>
+                    
+                    <div style={{ marginBottom: '1rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>Target Model</label>
+                      <select className="styled-select" value={selectedModelId} onChange={e => setSelectedModelId(e.target.value)} disabled={inputs.custom_params.use_custom_llm}>
+                        {models.map(m => (
+                          <option key={m.id} value={m.id}>{m.name} — {m.params_b}B{m.is_moe ? ` (${m.active_params_b}B active)` : ''}</option>
                         ))}
-                      </div>
+                      </select>
                     </div>
-                  )}
-                  {inputs.custom_params.use_custom && (
-                    <div style={{ background: 'rgba(255,202,40,0.05)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 8, padding: '1rem', marginTop: '0.5rem' }}>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ffca28', marginBottom: '0.75rem' }}>🛠️ Custom Model Parameters</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                         <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: '0.7rem' }}>
-                               <span style={{ color: 'var(--text-muted)' }}>LLM Parameters (B)</span>
-                               <span style={{ color: 'white', fontWeight: 700 }}>{inputs.custom_params.llm_params_b}B</span>
+
+                    {!inputs.custom_params.use_custom_llm && model && (
+                      <div style={{ background: 'rgba(42,159,255,0.05)', border: '1px solid rgba(42,159,255,0.15)', borderRadius: 8, padding: '0.875rem', fontSize: '0.75rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+                          {[
+                            ['Params', `${model.params_b}B`],
+                            ['Layers', model.layers],
+                            ['Attention', model.attention_type],
+                            ['KV Heads', model.num_kv_heads],
+                            ['Context Limit', `${(model.max_context_tokens / 1000).toFixed(0)}K tokens`],
+                            ['Type', model.is_moe ? `MoE` : 'Dense'],
+                          ].map(([k, v]) => (
+                            <div key={String(k)} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{v}</span>
                             </div>
-                            <input type="range" min="1" max="200" step="1" 
-                               value={inputs.custom_params.llm_params_b}
-                               onChange={(e) => setInput('custom_params', { ...inputs.custom_params, llm_params_b: parseFloat(e.target.value) })}
-                               style={{ width: '100%', accentColor: '#ffca28' }} />
-                         </div>
-                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                            <div>
-                               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: 4 }}>STT Params (M)</div>
-                               <input type="number" step="100" 
-                                  value={inputs.custom_params.stt_params_b * 1000}
-                                  onChange={(e) => setInput('custom_params', { ...inputs.custom_params, stt_params_b: parseFloat(e.target.value) / 1000 })}
-                                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'white', fontSize: '0.75rem', padding: '0.25rem' }} />
-                            </div>
-                            <div>
-                               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: 4 }}>TTS Params (M)</div>
-                               <input type="number" step="100" 
-                                  value={inputs.custom_params.tts_params_b * 1000}
-                                  onChange={(e) => setInput('custom_params', { ...inputs.custom_params, tts_params_b: parseFloat(e.target.value) / 1000 })}
-                                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'white', fontSize: '0.75rem', padding: '0.25rem' }} />
-                            </div>
-                         </div>
+                          ))}
+                        </div>
                       </div>
+                    )}
+
+                    {inputs.custom_params.use_custom_llm && (
+                      <div style={{ background: 'rgba(255,202,40,0.05)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 8, padding: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: '0.7rem' }}>
+                           <span style={{ color: 'var(--text-muted)' }}>LLM Parameters (B)</span>
+                           <span style={{ color: 'white', fontWeight: 700 }}>{inputs.custom_params.llm_params_b}B</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <input type="range" min="1" max="200" step="1" 
+                             value={inputs.custom_params.llm_params_b}
+                             onChange={(e) => setInput('custom_params', { ...inputs.custom_params, llm_params_b: parseFloat(e.target.value) })}
+                             style={{ flex: 1, accentColor: '#ffca28' }} />
+                          <input type="number" min="1" max="200" step="1"
+                             value={inputs.custom_params.llm_params_b}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value);
+                               if (!isNaN(val)) setInput('custom_params', { ...inputs.custom_params, llm_params_b: Math.min(200, Math.max(1, val)) });
+                             }}
+                             style={{ 
+                               width: '50px', 
+                               background: 'rgba(255,255,255,0.05)', 
+                               border: '1px solid rgba(255,202,40,0.3)', 
+                               borderRadius: '4px', 
+                               color: 'white', 
+                               fontSize: '0.75rem', 
+                               padding: '0.2rem',
+                               textAlign: 'center'
+                             }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* STT Configuration */}
+                {inputs.enabled_components.stt && (
+                  <div className="glass-card" style={{ padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>🎙️ STT Config</h2>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.7rem' }}>
+                        <input type="checkbox" checked={inputs.custom_params.use_custom_stt}
+                          onChange={(e) => setInput('custom_params', { ...inputs.custom_params, use_custom_stt: e.target.checked })}
+                          style={{ accentColor: '#ffca28' }} />
+                        <span style={{ color: inputs.custom_params.use_custom_stt ? '#ffca28' : 'var(--text-muted)' }}>Custom</span>
+                      </label>
                     </div>
-                  )}
+                    {inputs.custom_params.use_custom_stt ? (
+                      <div style={{ background: 'rgba(255,202,40,0.05)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 8, padding: '1rem' }}>
+                         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: 4 }}>STT Params (M)</div>
+                         <input type="number" step="100" 
+                            value={inputs.custom_params.stt_params_b * 1000}
+                            onChange={(e) => setInput('custom_params', { ...inputs.custom_params, stt_params_b: parseFloat(e.target.value) / 1000 })}
+                            style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'white', fontSize: '0.75rem', padding: '0.25rem' }} />
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: 8 }}>
+                         Using Production Preset: <strong>Whisper Large-v3</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TTS Configuration */}
+                {inputs.enabled_components.tts && (
+                  <div className="glass-card" style={{ padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>🗣️ TTS Config</h2>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.7rem' }}>
+                        <input type="checkbox" checked={inputs.custom_params.use_custom_tts}
+                          onChange={(e) => setInput('custom_params', { ...inputs.custom_params, use_custom_tts: e.target.checked })}
+                          style={{ accentColor: '#ffca28' }} />
+                        <span style={{ color: inputs.custom_params.use_custom_tts ? '#ffca28' : 'var(--text-muted)' }}>Custom</span>
+                      </label>
+                    </div>
+                    {inputs.custom_params.use_custom_tts ? (
+                      <div style={{ background: 'rgba(255,202,40,0.05)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 8, padding: '1rem' }}>
+                         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: 4 }}>TTS Params (M)</div>
+                         <input type="number" step="100" 
+                            value={inputs.custom_params.tts_params_b * 1000}
+                            onChange={(e) => setInput('custom_params', { ...inputs.custom_params, tts_params_b: parseFloat(e.target.value) / 1000 })}
+                            style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'white', fontSize: '0.75rem', padding: '0.25rem' }} />
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: 8 }}>
+                         Using Production Preset: <strong>XTTS-v2</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
                 </div>
 
                 <div className="glass-card" style={{ padding: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>🏗️ Architecture Strategy</h2>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.75rem' }}>
-                      <input type="checkbox" checked={inputs.custom_params.use_custom}
-                        onChange={(e) => setInput('custom_params', { ...inputs.custom_params, use_custom: e.target.checked })}
-                        style={{ accentColor: '#ffca28' }} />
-                      <span style={{ color: inputs.custom_params.use_custom ? '#ffca28' : 'var(--text-muted)' }}>Custom Mode</span>
-                    </label>
-                  </div>
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
                     {[
                       { id: 'monolithic', label: 'Monolithic', desc: 'Single-Instance AIO' },
@@ -635,6 +720,85 @@ export default function CalculatorPage() {
           {/* ======== FINOPS TAB ======== */}
           {activeTab === 'finops' && results && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+               {/* Verdict Banner */}
+               {results.finops.verdict && (
+                 <div className="glass-card" style={{ 
+                   padding: '1.5rem', 
+                   border: '2px solid #2a9fff44', 
+                   background: 'linear-gradient(135deg, rgba(42,159,255,0.1), transparent)',
+                   position: 'relative',
+                   overflow: 'hidden'
+                 }}>
+                   <div style={{ position: 'absolute', top: -10, right: -10, fontSize: '5rem', opacity: 0.05 }}>🏆</div>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                      <div>
+                         <div style={{ fontSize: '0.7rem', color: '#2a9fff', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Solution Architect Verdict</div>
+                         <h3 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'white', marginBottom: '0.5rem' }}>{results.finops.verdict.category}</h3>
+                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#2a9fff22', padding: '0.4rem 0.75rem', borderRadius: 6, border: '1px solid #2a9fff44' }}>
+                              <span style={{ fontSize: '1rem' }}>☁️</span>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#2a9fff' }}>{results.finops.verdict.recommended_platform}</span>
+                            </div>
+                            <button 
+                              onClick={() => setShowTerraform(!showTerraform)}
+                              className="tab-button" 
+                              style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', background: showTerraform ? '#2a9fff' : 'rgba(255,255,255,0.05)', color: showTerraform ? 'black' : 'white', fontWeight: 700 }}>
+                              {showTerraform ? '✕ Close Config' : '📄 Export Terraform'}
+                            </button>
+                         </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Total OpEx (Incl. Infra)</div>
+                        <div style={{ fontSize: '2rem', fontWeight: 900, color: '#00e676' }}>{formatUsd(results.finops.verdict.total_monthly_with_infra)}<span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/mo</span></div>
+                      </div>
+                   </div>
+                   <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: '80%', marginBottom: showTerraform ? '1.5rem' : 0 }}>
+                      {results.finops.verdict.advice}
+                   </p>
+
+                   {showTerraform && (
+                     <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                        <div style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                           <div style={{ display: 'flex', gap: '1rem' }}>
+                              <button 
+                                onClick={() => setTfTab('main')}
+                                style={{ background: 'transparent', border: 'none', color: tfTab === 'main' ? '#2a9fff' : 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', borderBottom: tfTab === 'main' ? '2px solid #2a9fff' : 'none', paddingBottom: 2 }}>
+                                main.tf
+                              </button>
+                              <button 
+                                onClick={() => setTfTab('vars')}
+                                style={{ background: 'transparent', border: 'none', color: tfTab === 'vars' ? '#2a9fff' : 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', borderBottom: tfTab === 'vars' ? '2px solid #2a9fff' : 'none', paddingBottom: 2 }}>
+                                terraform.tfvars
+                              </button>
+                           </div>
+                           <button 
+                             onClick={() => {
+                               const code = tfTab === 'main' ? results.finops.verdict!.terraform_draft : results.finops.verdict!.terraform_vars;
+                               navigator.clipboard.writeText(code);
+                               setCopied(true);
+                               setTimeout(() => setCopied(false), 2000);
+                             }}
+                             style={{ background: 'transparent', border: 'none', color: '#2a9fff', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>
+                             {copied ? '✓ Copied' : '📋 Copy Code'}
+                           </button>
+                        </div>
+                        <pre style={{ 
+                          padding: '1rem', 
+                          margin: 0, 
+                          fontSize: '0.75rem', 
+                          color: '#00e676', 
+                          fontFamily: 'JetBrains Mono, monospace', 
+                          lineHeight: 1.5,
+                          overflowX: 'auto',
+                          whiteSpace: 'pre'
+                        }}>
+                           {tfTab === 'main' ? results.finops.verdict.terraform_draft : results.finops.verdict.terraform_vars}
+                        </pre>
+                     </div>
+                   )}
+                 </div>
+               )}
+
                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
                   <div className="metric-card" style={{ background: 'rgba(0,230,118,0.05)', borderColor: 'rgba(0,230,118,0.2)' }}>
                      <div style={{ color: '#00e676', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>ESTIMATED MONTHLY (SPOT)</div>
@@ -642,21 +806,24 @@ export default function CalculatorPage() {
                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>${(results.finops.monthly_spot / inputs.target_ccu).toFixed(2)} / CCU month</div>
                   </div>
                   <div className="metric-card">
-                     <div style={{ color: '#2a9fff', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>SPOT SAVINGS VS ON-DEMAND</div>
+                     <div style={{ color: '#2a9fff', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>MONTHLY FIXED INFRA</div>
+                     <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'white' }}>{formatUsd(results.finops.verdict?.fixed_infra_monthly || 0)}</div>
+                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                        {inputs.cloud_provider === 'gcp' && "GKE Control Plane + Load Balancer"}
+                        {inputs.cloud_provider === 'aws' && "EKS Control Plane + ALB"}
+                        {inputs.cloud_provider === 'azure' && "AKS Control Plane + App Gateway"}
+                        {inputs.cloud_provider === 'on_prem' && "Self-Hosted Cluster Overhead"}
+                     </div>
+                  </div>
+                  <div className="metric-card">
+                     <div style={{ color: '#b388ff', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>SPOT SAVINGS VS ON-DEMAND</div>
                      <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#00e676' }}>{results.finops.savings_pct.toFixed(0)}%</div>
                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{formatUsd(results.finops.monthly_savings_spot)} saved every month</div>
                   </div>
-                  {inputs.cloud_provider === 'on_prem' && results.finops.on_prem_comparison && (
-                    <div className="metric-card" style={{ background: 'rgba(255,202,40,0.05)', borderColor: 'rgba(255,202,40,0.2)' }}>
-                      <div style={{ color: '#ffca28', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>ON-PREM BREAK EVEN</div>
-                      <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'white' }}>{results.finops.on_prem_comparison.payback_months_vs_cloud.toFixed(1)} <span style={{ fontSize: '1rem' }}>Mo</span></div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Capex: {formatUsd(results.finops.on_prem_comparison.total_capex)}</div>
-                    </div>
-                  )}
                </div>
 
                <div className="glass-card" style={{ padding: '1.5rem' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1.25rem', color: 'white' }}>🚀 Architectural Blueprint (Distributed Deployment)</h3>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1.25rem', color: 'white' }}>🚀 Architectural Blueprint ({inputs.deployment_strategy === 'monolithic' ? 'Single Pod' : 'Distributed Mesh'})</h3>
                   <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px solid var(--border)', padding: '1.5rem' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.6 }}>
                        Scale containers using <strong style={{ color: '#2a9fff' }}>Queue Depth</strong> metrics instead of CPU/GPU utilization for optimal conversational stability.
