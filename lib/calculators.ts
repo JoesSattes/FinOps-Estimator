@@ -19,7 +19,9 @@ export interface ModelPreset {
 }
 
 export interface CustomParams {
-  use_custom: boolean;
+  use_custom_llm: boolean;
+  use_custom_stt: boolean;
+  use_custom_tts: boolean;
   llm_params_b: number;
   stt_params_b: number;
   tts_params_b: number;
@@ -151,6 +153,14 @@ export interface GpuMatch {
   reason: string;
 }
 
+export interface SolutionVerdict {
+  category: string;
+  recommended_platform: string;
+  advice: string;
+  fixed_infra_monthly: number;
+  total_monthly_with_infra: number;
+}
+
 export interface FinOpsResult {
   gpu_matches: GpuMatch[];
   best_gpu: GpuSpec | null;
@@ -162,6 +172,7 @@ export interface FinOpsResult {
   annual_spot: number;
   cost_per_ccu_spot: number;
   hpa_config: string;
+  verdict: SolutionVerdict | null;
   on_prem_comparison?: {
     total_capex: number;
     monthly_opex: number;
@@ -173,7 +184,7 @@ export interface FinOpsResult {
 const PRECISION_BYTES: Record<string, number> = {
   fp32: 4,
   fp16: 2,
-  fp8:  1,
+  fp8: 1,
   int8: 1,
   int4: 0.5,
 };
@@ -187,15 +198,17 @@ export function calculateResources(inputs: CalculatorInputs): ResourceResult {
 
   let weights_vram_gb = 0;
   let kv_cache_vram_gb = 0;
-  let llm_ram_gb = (model as any).system_ram_gb || 8;
-  let llm_cpu_cores = (model as any).cpu_cores || 2;
+  let llm_ram_gb = 0;
+  let llm_cpu_cores = 0;
   let llm_tflops_req = 0;
 
   if (enabled_components.llm) {
-    const params = custom_params.use_custom ? custom_params.llm_params_b : model.params_b;
-    const active_params = custom_params.use_custom ? custom_params.llm_params_b : (model.is_moe ? model.active_params_b : model.params_b);
+    llm_ram_gb = (model as any).system_ram_gb || 8;
+    llm_cpu_cores = (model as any).cpu_cores || 2;
+    const params = custom_params.use_custom_llm ? custom_params.llm_params_b : model.params_b;
+    const active_params = custom_params.use_custom_llm ? custom_params.llm_params_b : (model.is_moe ? model.active_params_b : model.params_b);
     const is_gpu = component_devices.llm === 'gpu';
-    
+
     const w_gb = (active_params * precision_bytes);
     if (is_gpu) weights_vram_gb = w_gb;
     else llm_ram_gb += w_gb;
@@ -205,10 +218,10 @@ export function calculateResources(inputs: CalculatorInputs): ResourceResult {
     const head_dim = model.head_dim || 128;
     const kv_bytes_per_token = 2 * model.layers * kv_heads * head_dim * precision_bytes;
     const raw_kv_gb = (kv_bytes_per_token * context_length * target_ccu) / 1e9;
-    
+
     const fragmentation_factor = use_paged_attention ? 0.04 : 0.30;
     const kv_gb = raw_kv_gb * (1 + fragmentation_factor);
-    
+
     if (is_gpu) kv_cache_vram_gb = kv_gb;
     else llm_ram_gb += kv_gb;
 
@@ -221,14 +234,14 @@ export function calculateResources(inputs: CalculatorInputs): ResourceResult {
   // STT Custom Logic
   let stt_vram_gb = 0;
   if (enabled_components.stt && component_devices.stt === 'gpu') {
-    stt_vram_gb = custom_params.use_custom ? Math.max(1, (custom_params.stt_params_b * 2)) : 3.1;
+    stt_vram_gb = custom_params.use_custom_stt ? Math.max(1, (custom_params.stt_params_b * 2)) : 3.1;
   }
   const stt_ram_gb = enabled_components.stt ? ((enabled_components.stt && component_devices.stt === 'cpu') ? 8 : 4) : 0;
-  
+
   // TTS Custom Logic
   let tts_vram_gb = 0;
   if (enabled_components.tts && component_devices.tts === 'gpu') {
-    tts_vram_gb = custom_params.use_custom ? Math.max(1, (custom_params.tts_params_b * 2)) : 2.5;
+    tts_vram_gb = custom_params.use_custom_tts ? Math.max(1, (custom_params.tts_params_b * 2)) : 2.5;
   }
   const tts_ram_gb = enabled_components.tts ? ((enabled_components.tts && component_devices.tts === 'cpu') ? 8 : 4) : 0;
 
@@ -270,7 +283,7 @@ export function calculateLatency(inputs: CalculatorInputs): LatencyResult {
   const ttft_ms = enabled_components.llm ? (50 + (inputs.context_length / 1000) * 5) : 0;
   const tpot_ms = enabled_components.llm ? ((1000 / user_tps_required) * output_tokens) : 0;
   const tts_ms = enabled_components.tts ? (tts_rtf * 2500) : 0;
-  const speech_ms = enabled_components.speech_processing ? 200 : 0; 
+  const speech_ms = enabled_components.speech_processing ? 200 : 0;
 
   const total_ms = network_latency_ms + stt_ms + ttft_ms + tpot_ms + tts_ms + speech_ms;
   const within_budget = total_ms <= BUDGET_MS;
@@ -308,7 +321,7 @@ export function runFullCalculation(inputs: CalculatorInputs, gpuSpecs: GpuSpec[]
     const vram_utilization_pct = (resources.gpu_vram_gb / gpu.vram_gb) * 100;
 
     const p = gpu.pricing[inputs.cloud_provider];
-    
+
     const stt_ccu = inputs.enabled_components.stt ? Math.floor(1 / (inputs.stt_rtf * (1 - inputs.silence_ratio))) : 999;
     const llm_ccu = inputs.enabled_components.llm ? Math.floor(gpu.fp16_tflops * 1.5 / inputs.user_tps_required) : 999;
     const effective_per_gpu = Math.min(stt_ccu, llm_ccu);
@@ -349,6 +362,8 @@ export function runFullCalculation(inputs: CalculatorInputs, gpuSpecs: GpuSpec[]
   const monthly_on_demand = best_match?.on_demand_monthly_total || 0;
   const monthly_spot = best_match?.spot_monthly_total || 0;
 
+  const verdict = generateVerdict(inputs, resources, best_match);
+
   let on_prem_comparison;
   if (inputs.cloud_provider === 'on_prem' && best_match) {
     const capex = best_match.on_prem_capex || 0;
@@ -378,17 +393,78 @@ export function runFullCalculation(inputs: CalculatorInputs, gpuSpecs: GpuSpec[]
       annual_spot: monthly_spot * 12,
       cost_per_ccu_spot: monthly_spot / inputs.target_ccu,
       hpa_config: generateHpaConfig(inputs, best_match),
+      verdict,
       on_prem_comparison
     }
   };
 }
 
+function generateVerdict(inputs: CalculatorInputs, resources: ResourceResult, match: GpuMatch | null): SolutionVerdict | null {
+  if (!match) return null;
+
+  let category = "Internal Tools / SPU / Startups";
+  let platform = "";
+  let advice = "";
+  let fixed_infra = 0;
+
+  // 1. Determine Category based on scale
+  if (match.instances_needed > 1 && match.instances_needed <= 6) {
+    category = "SME Customer Service";
+    advice = "Resilient small cluster. Recommend managed Kubernetes with Spot VMs for high ROI.";
+  } else if (match.instances_needed > 6) {
+    category = "Enterprise / Mass Scale";
+    advice = "Large-scale orchestrated mesh. The Gold Standard: Kubernetes + Spot VMs + Queue-depth HPA.";
+  } else {
+    advice = "Single-node specialized instance. Good for R&D and internal teams.";
+  }
+
+  // 2. Holistic Provider-Specific Mapping
+  switch (inputs.cloud_provider) {
+    case 'gcp':
+      platform = match.gpu.name.includes("L4") ? "GKE + G2-standard-4 (L4)" : `GKE + ${match.gpu.name}`;
+      fixed_infra = 91; // $73 GKE + $18 LB
+      break;
+    case 'aws':
+      platform = match.gpu.name.includes("A10G") ? "EKS + g5.xlarge (A10G)" : `EKS + ${match.gpu.name}`;
+      fixed_infra = 88; // $72 EKS + $16 ALB
+      break;
+    case 'azure':
+      platform = match.gpu.name.includes("A100") ? "AKS + NCads_H_v4 (A100)" : `AKS + ${match.gpu.name}`;
+      fixed_infra = 93; // $75 AKS + $18 App Gateway
+      break;
+    case 'on_prem':
+      platform = resources.gpu_vram_gb < 24 ? "Enterprise L4 Server build" : "RTX 6000 Ada Server build";
+      advice += " Ensure high-bandwidth NVLink for multi-GPU coordination.";
+      fixed_infra = 0;
+      break;
+  }
+
+  // 3. Solution Pattern Advice
+  if (match.instances_needed === 1) {
+    advice = "The 'Conversational AI Pod' pattern: Host all components on a single specialized node for ultra-low internal latency.";
+  }
+
+  // CPU Trap check
+  const is_cpu_stt = inputs.enabled_components.stt && inputs.component_devices.stt === 'cpu';
+  if (is_cpu_stt && inputs.target_ccu > 20) {
+    advice += " ⚠️ Warning: You're in the 'CPU Trap'. Scaling STT on vCPU is less efficient than L4/A10G GPUs at this CCU.";
+  }
+
+  return {
+    category,
+    recommended_platform: platform,
+    advice,
+    fixed_infra_monthly: fixed_infra,
+    total_monthly_with_infra: match.spot_monthly_total + fixed_infra
+  };
+}
+
 function generateHpaConfig(inputs: CalculatorInputs, match: GpuMatch | null): string {
   if (!match) return "# No GPU fits this configuration";
-  
+
   const targetPerPod = Math.max(1, Math.floor(match.effective_per_gpu * 0.8)); // 80% target load
   const maxReplicas = Math.ceil(match.instances_needed * 1.25); // 25% headroom
-  
+
   return `# ${inputs.cloud_provider.toUpperCase()} Scaling Blueprint
 # Recommended GPU: ${match.gpu.name}
 # Per-Pod Capacity: ${match.effective_per_gpu} CCU
