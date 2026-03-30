@@ -148,9 +148,28 @@ export default function CalculatorPage() {
           {format(inputs[field] as number)}
         </span>
       </div>
-      <input type="range" className="slider" min={min} max={max} step={step}
-        value={inputs[field] as number}
-        onChange={e => setInput(field, parseFloat(e.target.value))} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <input type="range" className="slider" min={min} max={max} step={step}
+          value={inputs[field] as number}
+          onChange={e => setInput(field, parseFloat(e.target.value))}
+          style={{ flex: 1 }} />
+        <input type="number" min={min} max={max} step={step}
+          value={inputs[field] as number}
+          onChange={e => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val)) setInput(field, Math.min(max, Math.max(min, val)));
+          }}
+          style={{ 
+            width: '60px', 
+            background: 'rgba(255,255,255,0.05)', 
+            border: '1px solid var(--border)', 
+            borderRadius: '4px', 
+            color: 'white', 
+            fontSize: '0.75rem', 
+            padding: '0.25rem',
+            textAlign: 'center'
+          }} />
+      </div>
       {helpText && <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{helpText}</p>}
     </div>
   )
@@ -274,10 +293,28 @@ export default function CalculatorPage() {
                            <span style={{ color: 'var(--text-muted)' }}>LLM Parameters (B)</span>
                            <span style={{ color: 'white', fontWeight: 700 }}>{inputs.custom_params.llm_params_b}B</span>
                         </div>
-                        <input type="range" min="1" max="200" step="1" 
-                           value={inputs.custom_params.llm_params_b}
-                           onChange={(e) => setInput('custom_params', { ...inputs.custom_params, llm_params_b: parseFloat(e.target.value) })}
-                           style={{ width: '100%', accentColor: '#ffca28' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <input type="range" min="1" max="200" step="1" 
+                             value={inputs.custom_params.llm_params_b}
+                             onChange={(e) => setInput('custom_params', { ...inputs.custom_params, llm_params_b: parseFloat(e.target.value) })}
+                             style={{ flex: 1, accentColor: '#ffca28' }} />
+                          <input type="number" min="1" max="200" step="1"
+                             value={inputs.custom_params.llm_params_b}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value);
+                               if (!isNaN(val)) setInput('custom_params', { ...inputs.custom_params, llm_params_b: Math.min(200, Math.max(1, val)) });
+                             }}
+                             style={{ 
+                               width: '50px', 
+                               background: 'rgba(255,255,255,0.05)', 
+                               border: '1px solid rgba(255,202,40,0.3)', 
+                               borderRadius: '4px', 
+                               color: 'white', 
+                               fontSize: '0.75rem', 
+                               padding: '0.2rem',
+                               textAlign: 'center'
+                             }} />
+                        </div>
                       </div>
                     )}
                   </div>
